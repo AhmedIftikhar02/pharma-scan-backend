@@ -1,7 +1,10 @@
 import nest_asyncio
 nest_asyncio.apply()
+
 import time
 from fastapi import FastAPI, HTTPException
+from mangum import Mangum
+
 from pharma_scan.core.preprocessor import clean_text
 from pharma_scan.core.regex_parser import extract_dosage, extract_frequency, extract_duration
 from pharma_scan.core.fuzzy_ner import match_drug, extract_drug_token
@@ -14,6 +17,8 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Vercel needs this handler
+handler = Mangum(app, lifespan="off")
 
 @app.get("/")
 async def root():
@@ -22,7 +27,6 @@ async def root():
         "service": "Pharma-Scan Core AI Engine",
         "documentation": "/docs"
     }
-
 
 @app.post("/api/v1/analyze", response_model=PrescriptionResponse)
 async def analyze_prescription(payload: PrescriptionRequest):
@@ -39,7 +43,7 @@ async def analyze_prescription(payload: PrescriptionRequest):
         drug_token = extract_drug_token(line)
         extracted_dosage = extract_dosage(line)
         extracted_freq_dict = extract_frequency(line)
-        extracted_dur = extract_duration(line)  # new
+        extracted_dur = extract_duration(line)
 
         ner_result = match_drug(drug_token)
         if not ner_result or ner_result.get('is_unknown'):
@@ -52,7 +56,7 @@ async def analyze_prescription(payload: PrescriptionRequest):
             unverified_entity=ner_result["unverified_entity"],
             extracted_dosage=extracted_dosage,
             extracted_freq_dict=extracted_freq_dict,
-            extracted_duration=extracted_dur,  # new
+            extracted_duration=extracted_dur,
         )
         prescribed_medicines.append(final_entity)
 
