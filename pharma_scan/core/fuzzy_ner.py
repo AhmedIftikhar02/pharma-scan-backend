@@ -1,89 +1,80 @@
-# Cell 10: Write pharma_scan/core/fuzzy_ner.py
+from rapidfuzz import process, fuzz
+from pharma_scan.data.drug_lexicon import DRUG_LEXICON
 
-lines = [
-    "from rapidfuzz import process, fuzz\n",
-    "from pharma_scan.data.drug_lexicon import DRUG_LEXICON\n",
-    "\n",
-    "# Confidence thresholds\n",
-    "THRESHOLD_AUTO    = 85.0\n",
-    "THRESHOLD_WARN    = 65.0\n",
-    "\n",
-    "def match_drug(token: str) -> dict:\n",
-    "    \"\"\"\n",
-    "    Match a raw OCR token against the drug lexicon using RapidFuzz.\n",
-    "    Returns a result dict with match metadata.\n",
-    "\n",
-    "    Confidence tiers:\n",
-    "      >= 85 : auto-corrected, clean match\n",
-    "      65-84 : matched but flagged as unverified\n",
-    "      < 65  : rejected as unknown\n",
-    "    \"\"\"\n",
-    "    token_clean = token.strip()\n",
-    "\n",
-    "    result = process.extractOne(\n",
-    "        token_clean,\n",
-    "        DRUG_LEXICON,\n",
-    "        scorer=fuzz.token_sort_ratio,\n",
-    "        score_cutoff=0,\n",
-    "    )\n",
-    "\n",
-    "    if result is None:\n",
-    "        return {\n",
-    "            'medicine_name':     'UNKNOWN',\n",
-    "            'original_ocr_token': token_clean,\n",
-    "            'confidence_score':  0.0,\n",
-    "            'unverified_entity': False,\n",
-    "            'is_unknown':        True,\n",
-    "        }\n",
-    "\n",
-    "    matched_name, score, _ = result\n",
-    "    score = round(float(score), 2)\n",
-    "\n",
-    "    if score >= THRESHOLD_AUTO:\n",
-    "        return {\n",
-    "            'medicine_name':      matched_name,\n",
-    "            'original_ocr_token': token_clean,\n",
-    "            'confidence_score':   score,\n",
-    "            'unverified_entity':  False,\n",
-    "            'is_unknown':         False,\n",
-    "        }\n",
-    "    elif score >= THRESHOLD_WARN:\n",
-    "        return {\n",
-    "            'medicine_name':      matched_name,\n",
-    "            'original_ocr_token': token_clean,\n",
-    "            'confidence_score':   score,\n",
-    "            'unverified_entity':  True,\n",
-    "            'is_unknown':         False,\n",
-    "        }\n",
-    "    else:\n",
-    "        return {\n",
-    "            'medicine_name':      'UNKNOWN',\n",
-    "            'original_ocr_token': token_clean,\n",
-    "            'confidence_score':   score,\n",
-    "            'unverified_entity':  False,\n",
-    "            'is_unknown':         True,\n",
-    "        }\n",
-    "\n",
-    "\n",
-    "def extract_drug_token(line: str) -> str:\n",
-    "    \"\"\"\n",
-    "    Heuristic: first word(s) of a prescription line are the drug name.\n",
-    "    Strips known non-drug suffixes like 'tabs', 'syrup', 'cap', 'inj'.\n",
-    "    \"\"\"\n",
-    "    FORM_SUFFIXES = {'tabs', 'tab', 'syrup', 'cap', 'caps',\n",
-    "                     'inj', 'injection', 'susp', 'drops', 'cream', 'gel'}\n",
-    "    words = line.split()\n",
-    "    candidate_words = []\n",
-    "    for word in words:\n",
-    "        clean = word.strip('.,;:').lower()\n",
-    "        # Stop at dosage digit or known form suffix after first word collected\n",
-    "        if candidate_words and (clean[0].isdigit() or clean in FORM_SUFFIXES):\n",
-    "            break\n",
-    "        candidate_words.append(word)\n",
-    "    return ' '.join(candidate_words)\n",
-]
+# Confidence thresholds
+THRESHOLD_AUTO    = 85.0
+THRESHOLD_WARN    = 65.0
 
-with open("pharma_scan/core/fuzzy_ner.py", "w") as f:
-    f.writelines(lines)
+def match_drug(token: str) -> dict:
+    """
+    Match a raw OCR token against the drug lexicon using RapidFuzz.
+    Returns a result dict with match metadata.
 
-print("✅ fuzzy_ner.py written.")
+    Confidence tiers:
+      >= 85 : auto-corrected, clean match
+      65-84 : matched but flagged as unverified
+      < 65  : rejected as unknown
+    """
+    token_clean = token.strip()
+
+    result = process.extractOne(
+        token_clean,
+        DRUG_LEXICON,
+        scorer=fuzz.token_sort_ratio,
+        score_cutoff=0,
+    )
+
+    if result is None:
+        return {
+            'resolved_drug':     'UNKNOWN',
+            'original_token':    token_clean,
+            'confidence_score':  0.0,
+            'unverified_entity': False,
+            'is_unknown':        True,
+        }
+
+    matched_name, score, _ = result
+    score = round(float(score), 2)
+
+    if score >= THRESHOLD_AUTO:
+        return {
+            'resolved_drug':      matched_name,
+            'original_token':     token_clean,
+            'confidence_score':   score,
+            'unverified_entity':  False,
+            'is_unknown':         False,
+        }
+    elif score >= THRESHOLD_WARN:
+        return {
+            'resolved_drug':      matched_name,
+            'original_token':     token_clean,
+            'confidence_score':   score,
+            'unverified_entity':  True,
+            'is_unknown':         False,
+        }
+    else:
+        return {
+            'resolved_drug':      'UNKNOWN',
+            'original_token':     token_clean,
+            'confidence_score':   score,
+            'unverified_entity':  False,
+            'is_unknown':         True,
+        }
+
+
+def extract_drug_token(line: str) -> str:
+    """
+    Heuristic: first word(s) of a prescription line are the drug name.
+    Strips known non-drug suffixes like 'tabs', 'syrup', 'cap', 'inj'.
+    """
+    FORM_SUFFIXES = {'tabs', 'tab', 'syrup', 'cap', 'caps',
+                     'inj', 'injection', 'susp', 'drops', 'cream', 'gel'}
+    words = line.split()
+    candidate_words = []
+    for word in words:
+        clean = word.strip('.,;:').lower()
+        # Stop at dosage digit or known form suffix after first word collected
+        if candidate_words and (clean[0].isdigit() or clean in FORM_SUFFIXES):
+            break
+        candidate_words.append(word)
+    return ' '.join(candidate_words)

@@ -4,3 +4,4 @@ rapidfuzz>=3.1.1
 pydantic>=2.0
 nest-asyncio>=1.5.6
 pytest>=7.4.0
+mangum>=0.17.0

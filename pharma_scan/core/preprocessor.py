@@ -1,6 +1,3 @@
-# Cell 3: Write pharma_scan/core/preprocessor.py
-
-code = '''
 import re
 from typing import List
 
@@ -36,7 +33,7 @@ def _is_blocked_line(line: str) -> bool:
     return False
 
 
-def preprocess_text(raw_text: str) -> List[str]:
+def clean_text(raw_text: str) -> List[str]:
     """
     Split raw OCR payload into lines, strip letterhead/admin noise.
     Returns a list of clean candidate drug-entry lines.
@@ -48,9 +45,3 @@ def preprocess_text(raw_text: str) -> List[str]:
         if not _is_blocked_line(line)
     ]
     return clean_lines
-'''
-
-with open("pharma_scan/core/preprocessor.py", "w") as f:
-    f.write(code)
-
-print("✅ preprocessor.py written.")

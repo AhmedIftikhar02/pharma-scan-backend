@@ -1,117 +1,51 @@
-# Cell 12: Write pharma_scan/core/krr_engine.py
+from pharma_scan.data.knowledge_base import DEFAULT_DOSAGE_KB, TIME_TRIGGER_MAP
 
-lines = [
-    "from pharma_scan.data.knowledge_base import DEFAULT_DOSAGE_KB, TIME_TRIGGER_MAP\n",
-    "from pharma_scan.core.preprocessor import preprocess_text\n",
-    "from pharma_scan.core.regex_parser import extract_dosage, extract_frequency\n",
-    "from pharma_scan.core.fuzzy_ner import match_drug, extract_drug_token\n",
-    "\n",
-    "\n",
-    "def _resolve_dosage(medicine_name: str, extracted_dosage) -> dict:\n",
-    "    \"\"\"\n",
-    "    If dosage was extracted, use it.\n",
-    "    Otherwise look up KB default and flag is_predicted=True.\n",
-    "    \"\"\"\n",
-    "    if extracted_dosage:\n",
-    "        return {'value': extracted_dosage, 'is_predicted': False}\n",
-    "\n",
-    "    kb_key = medicine_name.lower()\n",
-    "    default = DEFAULT_DOSAGE_KB.get(kb_key)\n",
-    "    if default:\n",
-    "        return {'value': default, 'is_predicted': True}\n",
-    "\n",
-    "    return {'value': 'N/A', 'is_predicted': False}\n",
-    "\n",
-    "\n",
-    "def _resolve_frequency(line: str) -> dict:\n",
-    "    \"\"\"\n",
-    "    Extract frequency from line and map to trigger times via KRR rules.\n",
-    "    \"\"\"\n",
-    "    freq = extract_frequency(line)\n",
-    "    trigger_times = TIME_TRIGGER_MAP.get(freq['standard_code'], [])\n",
-    "    return {\n",
-    "        'standard_code':          freq['standard_code'],\n",
-    "        'original_code':          freq['original_code'],\n",
-    "        'suggested_trigger_times': trigger_times,\n",
-    "    }\n",
-    "\n",
-    "\n",
-    "def process_single_line(line: str) -> dict | None:\n",
-    "    \"\"\"\n",
-    "    Full pipeline for a single clean prescription line.\n",
-    "    Returns structured medicine block or None if drug is UNKNOWN.\n",
-    "    \"\"\"\n",
-    "    # Step 1: Extract drug token from line\n",
-    "    drug_token = extract_drug_token(line)\n",
-    "\n",
-    "    # Step 2: Fuzzy match against lexicon\n",
-    "    ner_result = match_drug(drug_token)\n",
-    "\n",
-    "    # Step 3: Skip completely unrecognized entries\n",
-    "    if ner_result['is_unknown']:\n",
-    "        return {\n",
-    "            'medicine_name':      'UNKNOWN',\n",
-    "            'original_ocr_token': ner_result['original_ocr_token'],\n",
-    "            'confidence_score':   ner_result['confidence_score'],\n",
-    "            'unverified_entity':  False,\n",
-    "            'dosage': {'value': 'N/A', 'is_predicted': False},\n",
-    "            'frequency': {\n",
-    "                'standard_code':           'UNKNOWN',\n",
-    "                'original_code':           'N/A',\n",
-    "                'suggested_trigger_times': [],\n",
-    "            },\n",
-    "        }\n",
-    "\n",
-    "    # Step 4: Extract dosage\n",
-    "    raw_dosage = extract_dosage(line)\n",
-    "\n",
-    "    # Step 5: KRR dosage resolution\n",
-    "    resolved_dosage = _resolve_dosage(ner_result['medicine_name'], raw_dosage)\n",
-    "\n",
-    "    # Step 6: KRR frequency resolution\n",
-    "    resolved_freq = _resolve_frequency(line)\n",
-    "\n",
-    "    return {\n",
-    "        'medicine_name':      ner_result['medicine_name'],\n",
-    "        'original_ocr_token': ner_result['original_ocr_token'],\n",
-    "        'confidence_score':   ner_result['confidence_score'],\n",
-    "        'unverified_entity':  ner_result['unverified_entity'],\n",
-    "        'dosage':             resolved_dosage,\n",
-    "        'frequency':          resolved_freq,\n",
-    "    }\n",
-    "\n",
-    "\n",
-    "def run_pipeline(raw_text: str) -> dict:\n",
-    "    \"\"\"\n",
-    "    Master pipeline entry point.\n",
-    "    Accepts raw OCR string, returns final structured JSON response.\n",
-    "    \"\"\"\n",
-    "    import time\n",
-    "    start = time.time()\n",
-    "\n",
-    "    # Phase 1: Preprocess\n",
-    "    clean_lines = preprocess_text(raw_text)\n",
-    "\n",
-    "    # Phase 2-5: Process each line\n",
-    "    medicines = []\n",
-    "    for line in clean_lines:\n",
-    "        result = process_single_line(line)\n",
-    "        if result:\n",
-    "            medicines.append(result)\n",
-    "\n",
-    "    elapsed_ms = round((time.time() - start) * 1000, 2)\n",
-    "\n",
-    "    return {\n",
-    "        'status': 'success',\n",
-    "        'meta': {\n",
-    "            'total_medicines_found': len(medicines),\n",
-    "            'processing_time_ms':    elapsed_ms,\n",
-    "        },\n",
-    "        'prescribed_medicines': medicines,\n",
-    "    }\n",
-]
+def _resolve_dosage(medicine_name: str, extracted_dosage: str | None) -> dict:
+    """
+    If dosage was extracted, use it.
+    Otherwise look up KB default fallback and flag is_predicted=True.
+    """
+    if extracted_dosage:
+        return {'value': extracted_dosage, 'is_predicted': False}
 
-with open("pharma_scan/core/krr_engine.py", "w") as f:
-    f.writelines(lines)
+    kb_key = medicine_name.lower()
+    default = DEFAULT_DOSAGE_KB.get(kb_key)
+    if default:
+        return {'value': default, 'is_predicted': True}
 
-print("✅ krr_engine.py written.")
+    return {'value': 'N/A', 'is_predicted': False}
+
+
+def apply_krr_rules(
+    resolved_drug: str,
+    original_token: str,
+    confidence_score: float,
+    unverified_entity: bool,
+    extracted_dosage: str | None,
+    extracted_freq_dict: dict
+) -> dict:
+    """
+    Knowledge Representation & Reasoning (KRR) Injection Engine.
+    Injects default baseline values, assigns real-world trigger alarm timestamps,
+    and formats the finalized entity structure matching the Pydantic response models.
+    """
+    # 1. Resolve Dosage using KB Fallbacks
+    resolved_dosage = _resolve_dosage(resolved_drug, extracted_dosage)
+
+    # 2. Map standard codes to real-world alarm timestamps
+    std_code = extracted_freq_dict.get('standard_code', 'UNKNOWN')
+    orig_code = extracted_freq_dict.get('original_code', 'N/A')
+    trigger_times = TIME_TRIGGER_MAP.get(std_code, [])
+
+    return {
+        'medicine_name': resolved_drug,
+        'original_ocr_token': original_token,
+        'confidence_score': confidence_score,
+        'unverified_entity': unverified_entity,
+        'dosage': resolved_dosage,
+        'frequency': {
+            'standard_code': std_code,
+            'original_code': orig_code,
+            'suggested_trigger_times': trigger_times,
+        }
+    }

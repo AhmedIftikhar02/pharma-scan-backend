@@ -1,63 +1,54 @@
-# Cell 14: Write pharma_scan/schemas/models.py
+from pydantic import BaseModel, Field
+from typing import List, Optional
 
-lines = [
-    "from pydantic import BaseModel, Field\n",
-    "from typing import List, Optional\n",
-    "\n",
-    "\n",
-    "# --- Request ---\n",
-    "\n",
-    "class AnalyzeRequest(BaseModel):\n",
-    "    raw_extracted_text: str = Field(\n",
-    "        ...,\n",
-    "        min_length=3,\n",
-    "        description='Raw OCR string extracted from prescription image'\n",
-    "    )\n",
-    "\n",
-    "\n",
-    "# --- Response sub-models ---\n",
-    "\n",
-    "class DosageBlock(BaseModel):\n",
-    "    value:        str\n",
-    "    is_predicted: bool\n",
-    "\n",
-    "\n",
-    "class FrequencyBlock(BaseModel):\n",
-    "    standard_code:           str\n",
-    "    original_code:           str\n",
-    "    suggested_trigger_times: List[str]\n",
-    "\n",
-    "\n",
-    "class MedicineEntry(BaseModel):\n",
-    "    medicine_name:      str\n",
-    "    original_ocr_token: str\n",
-    "    confidence_score:   float\n",
-    "    unverified_entity:  bool\n",
-    "    dosage:             DosageBlock\n",
-    "    frequency:          FrequencyBlock\n",
-    "\n",
-    "\n",
-    "class MetaBlock(BaseModel):\n",
-    "    total_medicines_found: int\n",
-    "    processing_time_ms:    float\n",
-    "\n",
-    "\n",
-    "# --- Root Response ---\n",
-    "\n",
-    "class AnalyzeResponse(BaseModel):\n",
-    "    status:               str\n",
-    "    meta:                 MetaBlock\n",
-    "    prescribed_medicines: List[MedicineEntry]\n",
-    "\n",
-    "\n",
-    "# --- Error Response ---\n",
-    "\n",
-    "class ErrorResponse(BaseModel):\n",
-    "    status:  str = 'error'\n",
-    "    message: str\n",
-]
 
-with open("pharma_scan/schemas/models.py", "w") as f:
-    f.writelines(lines)
+# --- Request ---
 
-print("✅ schemas/models.py written.")
+class PrescriptionRequest(BaseModel):
+    raw_extracted_text: str = Field(
+        ...,
+        min_length=3,
+        description='Raw OCR string extracted from prescription image'
+    )
+
+
+# --- Response sub-models ---
+
+class DosageBlock(BaseModel):
+    value:         str
+    is_predicted: bool
+
+
+class FrequencyBlock(BaseModel):
+    standard_code:           str
+    original_code:           str
+    suggested_trigger_times: List[str]
+
+
+class MedicineEntry(BaseModel):
+    medicine_name:      str
+    original_ocr_token: str
+    confidence_score:   float
+    unverified_entity:  bool
+    dosage:             DosageBlock
+    frequency:          FrequencyBlock
+
+
+class MetaBlock(BaseModel):
+    total_medicines_found: int
+    processing_time_ms:    float
+
+
+# --- Root Response ---
+
+class PrescriptionResponse(BaseModel):
+    status:               str
+    meta:                 MetaBlock
+    prescribed_medicines: List[MedicineEntry]
+
+
+# --- Error Response ---
+
+class ErrorResponse(BaseModel):
+    status:  str = 'error'
+    message: str

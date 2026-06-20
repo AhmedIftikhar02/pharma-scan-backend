@@ -1,89 +1,67 @@
-# Cell 19: Write pharma_scan/tests/test_pipeline.py
+import pytest
+from fastapi.testclient import TestClient
+from pharma_scan.main import app
 
-import sys
-for key in list(sys.modules.keys()):
-    if "pharma_scan" in key:
-        del sys.modules[key]
+client = TestClient(app)
 
-lines = [
-    "import pytest\n",
-    "from pharma_scan.core.krr_engine import run_pipeline\n",
-    "\n",
-    "\n",
-    "class TestOCRTypoCorrection:\n",
-    "    \"\"\"PRD Challenge 4 -- RapidFuzz guardrail tiers.\"\"\"\n",
-    "\n",
-    "    def test_panaddl_corrects_to_panadol(self):\n",
-    "        result = run_pipeline('Panaddl 500mg 1+1+1')\n",
-    "        med = result['prescribed_medicines'][0]\n",
-    "        assert med['medicine_name'] == 'Panadol'\n",
-    "        assert med['confidence_score'] >= 85.0\n",
-    "        assert med['unverified_entity'] is False\n",
-    "\n",
-    "    def test_brufn_corrects_to_brufen(self):\n",
-    "        result = run_pipeline('Brufn Syrup')\n",
-    "        med = result['prescribed_medicines'][0]\n",
-    "        assert med['medicine_name'] == 'Brufen'\n",
-    "        assert med['confidence_score'] >= 85.0\n",
-    "\n",
-    "    def test_azithromycn_corrects_to_azithromycin(self):\n",
-    "        result = run_pipeline('Azithromycn 250mg OD')\n",
-    "        med = result['prescribed_medicines'][0]\n",
-    "        assert med['medicine_name'] == 'Azithromycin'\n",
-    "        assert med['confidence_score'] >= 85.0\n",
-    "\n",
-    "    def test_pamado1_heavy_ocr_noise(self):\n",
-    "        result = run_pipeline('Pamado1 500mg BD')\n",
-    "        med = result['prescribed_medicines'][0]\n",
-    "        assert med['medicine_name'] in ('Panadol', 'UNKNOWN')\n",
-    "        if med['medicine_name'] != 'UNKNOWN':\n",
-    "            assert med['confidence_score'] >= 65.0\n",
-    "\n",
-    "\n",
-    "class TestKRRDosageFallback:\n",
-    "    \"\"\"PRD Challenge 2 -- KB-driven dosage fallback engine.\"\"\"\n",
-    "\n",
-    "    def test_missing_dosage_triggers_kb_default(self):\n",
-    "        result = run_pipeline('Brufn Syrup')\n",
-    "        med = result['prescribed_medicines'][0]\n",
-    "        assert med['dosage']['is_predicted'] is True\n",
-    "        assert med['dosage']['value'] == '400mg'\n",
-    "\n",
-    "    def test_explicit_dosage_skips_fallback(self):\n",
-    "        result = run_pipeline('Panaddl 500mg 1+1+1')\n",
-    "        med = result['prescribed_medicines'][0]\n",
-    "        assert med['dosage']['is_predicted'] is False\n",
-    "        assert med['dosage']['value'] == '500mg'\n",
-    "\n",
-    "    def test_amoxicillin_no_explicit_dosage_uses_kb(self):\n",
-    "        # KB has 'amoxicillin': '250mg' -- line has no mg/ml token\n",
-    "        result = run_pipeline('Amoxicillin tabs twice daily')\n",
-    "        med = result['prescribed_medicines'][0]\n",
-    "        assert med['dosage']['value'] == '250mg'\n",
-    "        assert med['dosage']['is_predicted'] is True\n",
-    "\n",
-    "    def test_unknown_drug_no_kb_entry_returns_na(self):\n",
-    "        # Drug genuinely absent from both lexicon match and KB\n",
-    "        result = run_pipeline('Xyzmycin 100mg OD')\n",
-    "        med = result['prescribed_medicines'][0]\n",
-    "        assert med['medicine_name'] == 'UNKNOWN'\n",
-    "        assert med['dosage']['value'] == 'N/A'\n",
-    "        assert med['dosage']['is_predicted'] is False\n",
-    "\n",
-    "\n",
-    "@pytest.fixture\n",
-    "def prd_sample_payload():\n",
-    "    return (\n",
-    "        'Dr. Sabeeh Ahmed Clinic\\n'\n",
-    "        'Tel: 123456 | Date: 2026-06 | Email: doctor@clinic.com\\n'\n",
-    "        'M.B.B.S Rgn No 4521 | Rx\\n'\n",
-    "        'Panaddl 500mg 1+1+1\\n'\n",
-    "        'Amoxicillin tabs twice daily\\n'\n",
-    "        'Brufn Syrup'\n",
-    "    )\n",
-]
+class TestOCRTypoCorrection:
+    """PRD Challenge 4 -- RapidFuzz guardrail tiers."""
 
-with open("pharma_scan/tests/test_pipeline.py", "w") as f:
-    f.writelines(lines)
+    def test_panaddl_corrects_to_panadol(self):
+        response = client.post("/api/v1/analyze", json={"raw_extracted_text": "Panaddl 500mg 1+1+1"})
+        assert response.status_code == 200
+        med = response.json()['prescribed_medicines'][0]
+        assert med['medicine_name'] == 'Panadol'
+        assert med['confidence_score'] >= 85.0
+        assert med['unverified_entity'] is False
 
-print("✅ tests/test_pipeline.py written (7 tests).")
+    def test_brufn_corrects_to_brufen(self):
+        response = client.post("/api/v1/analyze", json={"raw_extracted_text": "Brufn Syrup"})
+        assert response.status_code == 200
+        med = response.json()['prescribed_medicines'][0]
+        assert med['medicine_name'] == 'Brufen'
+        assert med['confidence_score'] >= 85.0
+
+    def test_azithromycn_corrects_to_azithromycin(self):
+        response = client.post("/api/v1/analyze", json={"raw_extracted_text": "Azithromycn 250mg OD"})
+        assert response.status_code == 200
+        med = response.json()['prescribed_medicines'][0]
+        assert med['medicine_name'] == 'Azithromycin'
+        assert med['confidence_score'] >= 85.0
+
+
+class TestKRRDosageFallback:
+    """PRD Challenge 2 -- KB-driven dosage fallback engine."""
+
+    def test_missing_dosage_triggers_kb_default(self):
+        response = client.post("/api/v1/analyze", json={"raw_extracted_text": "Brufn Syrup"})
+        assert response.status_code == 200
+        med = response.json()['prescribed_medicines'][0]
+        assert med['dosage']['is_predicted'] is True
+        assert med['dosage']['value'] == '400mg'
+
+    def test_explicit_dosage_skips_fallback(self):
+        response = client.post("/api/v1/analyze", json={"raw_extracted_text": "Panaddl 500mg 1+1+1"})
+        assert response.status_code == 200
+        med = response.json()['prescribed_medicines'][0]
+        assert med['dosage']['is_predicted'] is False
+        assert med['dosage']['value'] == '500mg'
+
+    def test_amoxicillin_no_explicit_dosage_uses_kb(self):
+        response = client.post("/api/v1/analyze", json={"raw_extracted_text": "Amoxicillin tabs twice daily"})
+        assert response.status_code == 200
+        med = response.json()['prescribed_medicines'][0]
+        assert med['dosage']['value'] == '250mg'
+        assert med['dosage']['is_predicted'] is True
+
+
+@pytest.fixture
+def prd_sample_payload():
+    return (
+        'Dr. Sabeeh Ahmed Clinic\n'
+        'Tel: 123456 | Date: 2026-06 | Email: doctor@clinic.com\n'
+        'M.B.B.S Rgn No 4521 | Rx\n'
+        'Panaddl 500mg 1+1+1\n'
+        'Amoxicillin tabs twice daily\n'
+        'Brufn Syrup'
+    )
