@@ -1,5 +1,6 @@
-import nest_asyncio
-nest_asyncio.apply()
+# DELETE THESE TWO LINES:
+# import nest_asyncio
+# nest_asyncio.apply()
 
 import time
 from fastapi import FastAPI, HTTPException
@@ -17,7 +18,6 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Vercel needs this handler
 handler = Mangum(app, lifespan="off")
 
 @app.get("/")
@@ -31,7 +31,6 @@ async def root():
 @app.post("/api/v1/analyze", response_model=PrescriptionResponse)
 async def analyze_prescription(payload: PrescriptionRequest):
     start_time = time.time()
-
     raw_text = payload.raw_extracted_text
     if not raw_text or not raw_text.strip():
         raise HTTPException(status_code=400, detail="Raw extracted text cannot be empty.")
