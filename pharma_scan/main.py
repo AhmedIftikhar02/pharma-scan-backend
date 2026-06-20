@@ -1,3 +1,5 @@
+import nest_asyncio
+nest_asyncio.apply()
 import time
 from fastapi import FastAPI, HTTPException
 from pharma_scan.core.preprocessor import clean_text
