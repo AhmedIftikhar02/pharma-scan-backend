@@ -6,7 +6,8 @@ from typing import List, Optional
 # Core engine imports
 from pharma_scan.core.preprocessor import clean_text
 from pharma_scan.core.regex_parser import extract_dosage, extract_frequency
-from pharma_scan.core.fuzzy_ner import match_drug
+# Yahan extract_drug_token ko import add kiya
+from pharma_scan.core.fuzzy_ner import match_drug, extract_drug_token 
 from pharma_scan.core.krr_engine import apply_krr_rules
 
 # Pydantic schemas
@@ -39,14 +40,16 @@ async def analyze_prescription(payload: PrescriptionRequest):
     
     # 2. Process each valid line
     for line in cleaned_lines:
-        # Extract direct features from regex
+        # --- FIX: Pehle line mien se pure drug token filter out karo ---
+        drug_token = extract_drug_token(line)
+        
+        # Extract direct features from regex using full line context
         extracted_dosage = extract_dosage(line)
         extracted_freq_dict = extract_frequency(line)
         
-        # Extract drug name using Fuzzy NER
-        ner_result = match_drug(line)
+        # --- FIX: Ab pure drug token pass karo fuzzy match ko, poori line nahi ---
+        ner_result = match_drug(drug_token)
         
-        # If no valid drug is found or confidence is below absolute safety threshold, skip or handle
         if not ner_result:
             continue
             
@@ -66,10 +69,7 @@ async def analyze_prescription(payload: PrescriptionRequest):
         "status": "success",
         "meta": {
             "total_medicines_found": len(prescribed_medicines),
-            "processing_time_ms": 0.2  # Simulated or lightweight benchmark
+            "processing_time_ms": 0.2
         },
         "prescribed_medicines": prescribed_medicines
     }
-
-    from mangum import Mangum
-    handler = Mangum(app)
