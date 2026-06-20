@@ -1,2 +1,0 @@
-[tool.vercel]
-entrypoint = "pharma_scan.main:app"
