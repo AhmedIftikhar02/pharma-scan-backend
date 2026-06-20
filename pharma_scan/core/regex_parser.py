@@ -1,62 +1,85 @@
 import re
+from typing import Optional
 
-# --- Regex Patterns for Dosage Extraction ---
-# Matches patterns like 500mg, 500 mg, 10ml, 2.5ml, 1 tab, 2 capsules
+# Dosage pattern: 500mg, 10ml, 2.5mg, 1000iu, etc.
 _RE_DOSAGE = re.compile(
-    r'(\d+(?:\.\d+)?)\s*(mg|ml|g|tab|tabs|capsule|capsules|cap|caps|puff|puffs|tsp|tbsp)\b',
+    r'\b(\d+(?:\.\d+)?)\s*(mg|ml|mcg|g|iu|mg\/ml|mg\/5ml|tab|tabs|capsule|capsules|cap|caps|puff|puffs|tsp|tbsp)\b',
     re.IGNORECASE
 )
 
-# --- Regex Patterns for Frequency Codes ---
+# Numeric matrix: 1+1+1, 1-0-1, 1/0/1 (FIXED: removed Unicode character bug)
+_RE_MATRIX = re.compile(
+    r'\b([0-2])\s*[\+\-\/\.]\s*([0-2])\s*[\+\-\/\.]\s*([0-2])\b'
+)
+
+# Duration: "for 5 days", "x7", "1 week", "2 months"
+_RE_DURATION = re.compile(
+    r'\b(?:for\s+)?(\d+)\s*(day|days|week|weeks|month|months)\b|x\s*(\d+)',
+    re.IGNORECASE
+)
+
 _FREQ_PATTERNS = {
-    'ONCE_A_DAY': re.compile(r'\b(od|once\s+daily|once\s+a\s+day|in\s+the\s+morning|at\s+bedtime)\b', re.IGNORECASE),
-    'TWICE_A_DAY': re.compile(r'\b(bd|bid|twice\s+daily|twice\s+a\s+day|every\s+12\s+hours)\b', re.IGNORECASE),
-    'THREE_TIMES_A_DAY': re.compile(r'\b(tds|tid|three\s+times\s+daily|three\s+times\s+a\s+day|every\s+8\s+hours)\b', re.IGNORECASE),
-    'FOUR_TIMES_A_DAY': re.compile(r'\b(qds|qid|four\s+times\s+daily|four\s+times\s+a\s+day|every\s+6\s+hours)\b', re.IGNORECASE),
-    'BEFORE_SLEEP': re.compile(r'\b(hs|at\s+night|before\s+sleep|night)\b', re.IGNORECASE),
-    'BEFORE_MEALS': re.compile(r'\b(ac|before\s+meals|empty\s+stomach)\b', re.IGNORECASE),
-    'AFTER_MEALS': re.compile(r'\b(pc|after\s+meals)\b', re.IGNORECASE),
-    'AS_NEEDED': re.compile(r'\b(sos|prn|as\s+needed|whenever\s+required)\b', re.IGNORECASE),
+    'ONCE_A_DAY': re.compile(
+        r'\b(od|once\s+daily|once\s+a\s+day|in\s+the\s+morning|daily|once)\b',
+        re.IGNORECASE
+    ),
+    'TWICE_A_DAY': re.compile(
+        r'\b(bd|bid|twice\s+daily|twice\s+a\s+day|every\s+12\s+hours|2\s*times\s*daily|twice)\b',
+        re.IGNORECASE
+    ),
+    'THREE_TIMES_A_DAY': re.compile(
+        r'\b(tds|tid|three\s+times\s+daily|three\s+times\s+a\s+day|every\s+8\s+hours|3\s*times\s*daily)\b',
+        re.IGNORECASE
+    ),
+    'FOUR_TIMES_A_DAY': re.compile(
+        r'\b(qds|qid|four\s+times\s+daily|four\s+times\s+a\s+day|every\s+6\s+hours|4\s*times\s*daily)\b',
+        re.IGNORECASE
+    ),
+    'BEFORE_SLEEP': re.compile(
+        r'\b(hs|at\s+night|before\s+sleep|night|bedtime)\b',
+        re.IGNORECASE
+    ),
+    'BEFORE_MEALS': re.compile(
+        r'\b(ac|before\s+meals|empty\s+stomach|before\s+eating)\b',
+        re.IGNORECASE
+    ),
+    'AFTER_MEALS': re.compile(
+        r'\b(pc|after\s+meals|after\s+eating|with\s+food)\b',
+        re.IGNORECASE
+    ),
+    'AS_NEEDED': re.compile(
+        r'\b(sos|prn|as\s+needed|whenever\s+required|if\s+needed)\b',
+        re.IGNORECASE
+    ),
 }
 
-# --- Numeric Matrix Pattern (e.g., 1+1+1, 1-0-1, 0-0-1) ---
-_RE_MATRIX = re.compile(r'\b([0-2])\s*[\+\-\:引导]\s*([0-2])\s*[\+\-\:引导]\s*([0-2])\b')
 
-
-def extract_dosage(line: str) -> str | None:
-    """
-    Scans a line and extracts structural dosage details (e.g., '500mg').
-    Returns None if no dosage token matches.
-    """
+def extract_dosage(line: str) -> Optional[str]:
     match = _RE_DOSAGE.search(line)
     if match:
-        # Reconstruct cleanly (e.g., '500 mg' -> '500mg')
-        return f"{match.group(1)}{match.group(2).lower()}"
+        return f"{match.group(1)}{match.group(2).lower().replace(' ', '')}"
     return None
 
 
 def extract_frequency(line: str) -> dict:
-    """
-    Scans a line for explicit Latin codes, English phrases, or numeric matrices (1+1+1).
-    Maps it to a standardized KRR trigger code.
-    """
-    # 1. Test Numeric Matrix First (e.g., 1+1+1, 1-0-1)
+    # 1. Check numeric matrix first (1+1+1, 1-0-1)
     matrix_match = _RE_MATRIX.search(line)
     if matrix_match:
         vals = [int(x) for x in matrix_match.groups()]
-        total_doses = sum(vals)
-        orig_str = matrix_match.group(0)
-        
-        if total_doses == 3:
-            return {'standard_code': 'THREE_TIMES_A_DAY', 'original_code': orig_str}
-        elif total_doses == 2:
-            return {'standard_code': 'TWICE_A_DAY', 'original_code': orig_str}
-        elif total_doses == 1:
-            return {'standard_code': 'ONCE_A_DAY', 'original_code': orig_str}
-        elif total_doses == 4:
-            return {'standard_code': 'FOUR_TIMES_A_DAY', 'original_code': orig_str}
+        total = sum(vals)
+        orig_str = matrix_match.group(0).replace(' ', '')
+        dose_map = {
+            1: 'ONCE_A_DAY',
+            2: 'TWICE_A_DAY',
+            3: 'THREE_TIMES_A_DAY',
+            4: 'FOUR_TIMES_A_DAY',
+        }
+        return {
+            'standard_code': dose_map.get(total, f'CUSTOM_{total}_TIMES_A_DAY'),
+            'original_code': orig_str
+        }
 
-    # 2. Test Direct Patterns (Regex Map)
+    # 2. Check Latin/English patterns
     for code, pattern in _FREQ_PATTERNS.items():
         match = pattern.search(line)
         if match:
@@ -65,8 +88,16 @@ def extract_frequency(line: str) -> dict:
                 'original_code': match.group(0).upper()
             }
 
-    # 3. Fallback if completely unknown
-    return {
-        'standard_code': 'UNKNOWN',
-        'original_code': 'N/A'
-    }
+    # 3. Fallback
+    return {'standard_code': 'UNKNOWN', 'original_code': 'N/A'}
+
+
+def extract_duration(line: str) -> Optional[str]:
+    match = _RE_DURATION.search(line)
+    if not match:
+        return None
+    if match.group(3):  # x7 pattern
+        return f"{match.group(3)} days"
+    count = match.group(1)
+    unit = match.group(2).lower()
+    return f"{count} {unit}"

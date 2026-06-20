@@ -1,10 +1,7 @@
 from pharma_scan.data.knowledge_base import DEFAULT_DOSAGE_KB, TIME_TRIGGER_MAP
 
+
 def _resolve_dosage(medicine_name: str, extracted_dosage: str | None) -> dict:
-    """
-    If dosage was extracted, use it.
-    Otherwise look up KB default fallback and flag is_predicted=True.
-    """
     if extracted_dosage:
         return {'value': extracted_dosage, 'is_predicted': False}
 
@@ -22,17 +19,11 @@ def apply_krr_rules(
     confidence_score: float,
     unverified_entity: bool,
     extracted_dosage: str | None,
-    extracted_freq_dict: dict
+    extracted_freq_dict: dict,
+    extracted_duration: str | None = None,
 ) -> dict:
-    """
-    Knowledge Representation & Reasoning (KRR) Injection Engine.
-    Injects default baseline values, assigns real-world trigger alarm timestamps,
-    and formats the finalized entity structure matching the Pydantic response models.
-    """
-    # 1. Resolve Dosage using KB Fallbacks
     resolved_dosage = _resolve_dosage(resolved_drug, extracted_dosage)
 
-    # 2. Map standard codes to real-world alarm timestamps
     std_code = extracted_freq_dict.get('standard_code', 'UNKNOWN')
     orig_code = extracted_freq_dict.get('original_code', 'N/A')
     trigger_times = TIME_TRIGGER_MAP.get(std_code, [])
@@ -47,5 +38,6 @@ def apply_krr_rules(
             'standard_code': std_code,
             'original_code': orig_code,
             'suggested_trigger_times': trigger_times,
-        }
+        },
+        'duration': extracted_duration or 'N/A',
     }

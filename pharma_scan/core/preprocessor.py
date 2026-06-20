@@ -1,31 +1,38 @@
 import re
 from typing import List
 
-# --- Block-list: administrative/non-medical tokens to strip ---
 BLOCK_LIST_TOKENS: List[str] = [
+    # Original tokens
     "dr.", "clinic", "hospital", "tel:", "tel :", "phone:", "phone :",
     "email:", "email :", "web:", "web :", "address", "date:",
     "m.b.b.s", "mbbs", "rgn no", "rx", "patient:", "patient :",
     "age:", "name:", "gender:", "signature", "stamp",
+    # Extended tokens
+    "fcps", "mrcp", "md.", "ms.", "prof.", "consultant",
+    "prescription", "ref.", "ref:", "follow up", "follow-up",
+    "advised", "advised to", "investigations", "lab:", "report",
+    "next visit", "review after", "blood pressure", "weight:",
+    "bp:", "sugar:", "registration", "opd", "ipd", "ward",
+    "uhid", "mr no", "mr:", "cr no", "cr:", "bill no",
+    "whatsapp", "facebook", "www.", "http",
 ]
 
-# --- Regex: strip lines that are purely numeric or date-like ---
 _RE_PURE_NUMERIC = re.compile(r"^\s*[\d\s\-\/\:\.\,]+\s*$")
+_RE_PHONE_LIKE = re.compile(r"^\s*[\+\d\s\-\(\)]{7,}\s*$")
 
 
 def _is_blocked_line(line: str) -> bool:
-    """Return True if this line should be removed from the payload."""
     lower = line.lower().strip()
 
-    # Empty or whitespace-only
     if not lower:
         return True
 
-    # Purely numeric / date line
     if _RE_PURE_NUMERIC.match(lower):
         return True
 
-    # Contains any block-list token
+    if _RE_PHONE_LIKE.match(lower):
+        return True
+
     for token in BLOCK_LIST_TOKENS:
         if token in lower:
             return True
@@ -34,10 +41,6 @@ def _is_blocked_line(line: str) -> bool:
 
 
 def clean_text(raw_text: str) -> List[str]:
-    """
-    Split raw OCR payload into lines, strip letterhead/admin noise.
-    Returns a list of clean candidate drug-entry lines.
-    """
     lines = raw_text.splitlines()
     clean_lines = [
         line.strip()
